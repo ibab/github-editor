@@ -16,7 +16,8 @@ import docopt
 import os
 import sys
 
-CREDENTIALS = '/home/igor/.gheditrc'
+home = os.environ.get('HOME')
+CREDENTIALS = home + '/.gheditrc'
 EDITOR = os.environ.get('EDITOR','vim')
 
 if __name__ == '__main__':
