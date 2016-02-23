@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+
+'''Github editor.
+
+Usage:
+    ged <repo> <file>
+'''
+
+from github3 import authorize, login
+from github3.models import GitHubError
+from getpass import getuser, getpass
+from tempfile import NamedTemporaryFile
+import frontmatter
+from subprocess import call
+import docopt
+import os
+import sys
+
+CREDENTIALS = '/home/igor/.gheditrc'
+EDITOR = os.environ.get('EDITOR','vim')
+
+if __name__ == '__main__':
+
+    arguments = docopt.docopt(__doc__, version='Github edit 0.0')
+
+    username, reponame = arguments['<repo>'].split('/')
+
+    if not os.path.exists(CREDENTIALS):
+        user = input('Username: ')
+        password = ''
+
+        while not password:
+            password = getpass('Password for {}: '.format(user))
+
+        note = 'Github edit command line editor'
+        scopes = ['user', 'repo']
+
+        auth = authorize(user, password, scopes, note)
+
+        with open(CREDENTIALS, 'w') as f:
+            f.write(auth.token + '\n')
+            f.write(str(auth.id))
+        token = auth.token
+    else:
+        with open(CREDENTIALS, 'r') as f:
+            token = f.readline().strip()
+            id = int(f.readline().strip())
+
+    gh = login(token=token)
+    repo = gh.repository(username, reponame)
+    contents = repo.contents(arguments['<file>'])
+    text = contents.decoded
+
+    post = frontmatter.loads(text)
+    post['message'] = 'Update {}'.format(arguments['<file>'])
+
+    with NamedTemporaryFile(suffix='.md', mode='w+') as f:
+        frontmatter.dump(post, f)
+        f.flush()
+        call([EDITOR, f.name])
+        f.seek(0)
+        new_post = frontmatter.load(f)
+        message = new_post['message']
+        updated = new_post.content.encode('utf-8')
+
+    if updated == text:
+        print('Content hasn\'t changed. Didn\'t update')
+    elif not updated.strip():
+        print('Empty file. Didn\'t update')
+    else:
+        contents.update(message, updated)
+        print('Updated {} in {}'.format(arguments['<file>'], arguments['<repo>']))
+
